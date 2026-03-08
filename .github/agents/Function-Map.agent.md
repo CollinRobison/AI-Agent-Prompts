@@ -20,19 +20,31 @@ When invoked, you autonomously explore the codebase to create detailed function 
    - Read each function to extract complete details
 
 2. **Information Extraction**
-   For each function, gather:
+   For each function (both internal and external), gather:
    - Function name and signature
    - Description/purpose (from comments AND by analyzing code logic. DO NOT TAKE COMMENTS VERBATIM IF THE CODE SAYS SOMETHING DIFFERENT. note if comments are wrong.)
    - Input parameters with types
    - Return values with types
-   - File location (full path)
+   - File location (**COMPLETE path - NEVER truncate with "..."**)
    - Line number range (start and end)
+   
+   **CRITICAL**: When a function calls an external function from another file/class:
+   - Navigate to that external file
+   - Read the external function definition
+   - Create a FULL BOX for the external function with all details
+   - **STOP THERE**: Do NOT trace the call chain inside external functions
+   - Focus remains on the primary file/module being analyzed
+   - Exception: If user explicitly asks to "trace external dependencies" or "map full call chain", then continue into external functions
 
 3. **Relationship Mapping**
    - Trace function calls to identify relationships
    - Build call hierarchy (parent → child functions)
+   - For external function calls (from other files/classes), navigate to those files and analyze them
    - Identify execution flow and sequence
    - Note what data/reason triggers each call
+   - Create boxes for ALL called functions, whether internal or external to the main file
+   - **Scope Boundary**: Stop tracing at external function boundaries (don't map what external functions call internally)
+   - Keep the diagram focused on the primary module's logic and its immediate dependencies
 
 ## Output Format
 
@@ -60,14 +72,54 @@ Generate an ASCII flowchart using box-drawing characters:
                 └──────────────────────────────────────────┘
 ```
 
+### Handling Recursive and Repeated Calls
+
+**CRITICAL**: Create only ONE box per unique function. When a function is called multiple times or recursively:
+
+**For recursive calls** (function calls itself):
+```
+┌──────────────────┐
+│ recursiveFunc()  │◄───┐
+│ Description      │    │
+│ Input: n (int)   │    │
+│ Output: result   │    │ recursive call with n-1
+│ File: file.ext   │    │
+│ Lines: 10-25     │    │
+└──────────────────┘────┘
+```
+
+**For repeated calls** (function called from multiple places):
+```
+┌──────────────┐
+│ parentA()    │
+└──────┬───────┘
+       │ calls helper
+       ▼
+┌──────────────┐ ◄─────┐
+│ helperFunc() │       │
+│ Description  │       │ also calls helper
+└──────┬───────┘       │
+       │               │
+       ▼               │
+┌──────────────┐       │
+│ parentB()    │───────┘
+└──────────────┘
+```
+
 ## ASCII Art Guidelines
 
 - Use box characters: `┌─┐│└┘├┤┬┴┼`
-- Show flow with: `│ ▼ →`
+- Show flow with: `│ ▼ → ◄`
 - Label all arrows with the action/reason
 - Top-down hierarchy (entry point at top)
 - Align related function calls horizontally
 - Keep boxes uniform width when possible
+- **ONE BOX PER FUNCTION**: Never duplicate function boxes
+- **Reuse boxes**: Draw arrows back to existing boxes for repeated calls
+- **Show recursion clearly**: Use looping arrows (◄─┐) back to the same box
+- **Track created functions**: Maintain a list of functions you've already drawn to avoid duplicates
+- **NEVER truncate file paths**: Always display complete file paths (e.g., `markdown-journal-cli/Services/TableOfContentsService.cs`, NOT `...Service.cs` or `...serivce.cs`)
+- **External functions get full boxes**: Functions from other files need complete boxes with all information, not just arrow labels
 
 ## Additional Documentation
 
@@ -90,12 +142,15 @@ Bullet points highlighting important relationships:
 - **Use grep_search** for exact function definitions and invocations
 - **Read complete functions** (not just signatures) to understand behavior
 - **Trace call chains** recursively from entry points to leaf functions
+- **For external calls**: Navigate to the external file, read the function, gather full details
 - **Cross-reference** multiple search results to ensure accuracy
 - **Verify** line numbers by reading actual file contents
+- **Never skip external functions**: If function A calls external function B, you must locate and analyze B
 
 ## Scope Management
 
 - Focus on the requested module/feature, not the entire codebase
+- **External function boundaries**: Document external functions when called, but don't trace their internal call chains (unless user explicitly requests deep tracing)
 - If the scope is too large, ask the user to narrow it
 - For complex systems, offer to create multiple focused diagrams
 - Prioritize public/exported functions over internal helpers (unless requested)
