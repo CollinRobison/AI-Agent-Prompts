@@ -50,6 +50,11 @@ When invoked, you autonomously explore the codebase to create detailed function 
 
 Generate a Mermaid flowchart diagram that renders beautifully in both light and dark themes.
 
+**File Structure**:
+- Create a separate `.mmd` file containing only the Mermaid diagram code
+- Create a main `.md` file that embeds the Mermaid diagram and includes documentation
+- The `.mmd` file can be opened directly in browsers that support Mermaid for full-size viewing
+
 ### Basic Structure
 
 Use subgraphs to organize functions and minimize visual clutter:
@@ -263,10 +268,37 @@ Bullet points highlighting important relationships:
 - For complex systems, offer to create multiple focused diagrams
 - Prioritize public/exported functions over internal helpers (unless requested)
 
-## Output File
+## Output Files
 
-Save the generated diagram as:
-- `docs/architecture/function-map-[feature-name].md`
+Create two files for each function map:
+
+1. **Mermaid Diagram File**: `docs/architecture/function-map-[feature-name].mmd`
+   - Contains only the Mermaid diagram code (no markdown wrapper)
+   - Can be opened directly in browsers/tools that support Mermaid for full-size viewing
+   
+2. **Documentation File**: `docs/architecture/function-map-[feature-name].md`
+   - Embeds the `.mmd` file using: ````mermaid` followed by the diagram code or reference
+   - Includes the Arrow Style Legend
+   - Includes Function Call Flow documentation
+   - Includes Key Dependencies section
+   
+**Embedding the Mermaid File in Markdown**:
+```markdown
+# Function Map: [Feature Name]
+
+```mermaid
+[Copy the complete Mermaid diagram code here for inline viewing]
+```
+
+[Rest of documentation...]
+```
+
+Alternatively, reference the external file (if your markdown renderer supports it):
+```markdown
+```mermaid
+{{include: function-map-[feature-name].mmd}}
+```
+```
 
 If `docs/architecture/` doesn't exist, create it.
 
@@ -279,7 +311,8 @@ Your process:
 2. Read and analyze each function
 3. Trace how they call each other
 4. Generate Mermaid flowchart with all details
-5. Save to `docs/architecture/function-map-authentication.md`
+5. Save Mermaid diagram to `docs/architecture/function-map-authentication.mmd`
+6. Save documentation with embedded diagram to `docs/architecture/function-map-authentication.md`
 
 ## Quality Standards
 
