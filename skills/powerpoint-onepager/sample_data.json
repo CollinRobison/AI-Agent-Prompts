@@ -1,0 +1,17 @@
+{
+  "title": "Q1 Commercial Performance Overview",
+  "summary": [
+    "Total revenue increased 14.2% quarter-over-quarter across all regions.",
+    "Enterprise segment outperformed SMB by 9 points in growth rate.",
+    "March delivered the strongest pipeline conversion of the quarter.",
+    "Customer churn improved from 4.1% to 3.4% after onboarding refresh."
+  ],
+  "records": [
+    {"label": "January", "value": 142000, "trend": "up"},
+    {"label": "February", "value": 156500, "trend": "up"},
+    {"label": "March", "value": 168900, "trend": "up"},
+    {"label": "April", "value": 161200, "trend": "down"},
+    {"label": "May", "value": 174300, "trend": "up"},
+    {"label": "June", "value": 182750, "trend": "up"}
+  ]
+}
