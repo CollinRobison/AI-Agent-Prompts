@@ -664,7 +664,7 @@ def _add_kpi_row(
     gutter = int(total_width * 0.02)
     box_w = (total_width - gutter * (n - 1)) // n
     on_dark_bg = _is_dark(theme.accent_hexes[0])
-    txt_on_accent = "FFFFFF" if on_dark_bg or True else theme.text_hex
+    txt_on_accent = "FFFFFF" if on_dark_bg else theme.text_hex
 
     for i, (value_str, label_str) in enumerate(kpis):
         bx = left + i * (box_w + gutter)
