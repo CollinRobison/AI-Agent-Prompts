@@ -130,11 +130,14 @@ def _read_xml_theme(prs: Presentation) -> tuple[dict[str, str], str, str]:
     body_font = DEFAULT_BODY_FONT
 
     try:
+        from lxml import etree as _etree
         master = prs.slide_master
         for rel in master.part.rels.values():
             if not rel.reltype.endswith("/theme"):
                 continue
-            theme_elem = rel.target_part._element
+            # python-pptx may return a plain Part (no _element) for theme rels;
+            # parse the raw blob directly so this works across all templates.
+            theme_elem = _etree.fromstring(rel.target_part.blob)
 
             # Color scheme: the authoritative slot names PowerPoint respects.
             clr_scheme = theme_elem.find(".//" + qn("a:clrScheme"))
@@ -482,7 +485,16 @@ def _build_insight_bullets(data: NormalizedData) -> list[str]:
 
 
 def _infer_chart_type(records: list[dict[str, Any]], label_key: str) -> str:
-    """Pick bar, line, or pie based on data characteristics."""
+    """Pick bar, line, or pie based on data characteristics.
+
+    Decision order (first match wins):
+    1. Temporal labels  → line
+    2. Ordinal labels (scores, ratings, ranks, tiers, grades) → bar
+       Pie is WRONG for ordered categories even when there are ≤ 7 of them —
+       pie implies equal-standing parts of a whole, not a ranked scale.
+    3. ≤ 5 records whose values sum to ~100 (true part-of-whole) → pie
+    4. Everything else → bar
+    """
     n = len(records)
     time_kws = {
         "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug",
@@ -490,14 +502,37 @@ def _infer_chart_type(records: list[dict[str, Any]], label_key: str) -> str:
         "week", "day", "month", "year", "quarter",
         "2020", "2021", "2022", "2023", "2024", "2025", "2026",
     }
+    ordinal_kws = {
+        "score", "rating", "rank", "grade", "tier", "level", "star",
+        "priority", "severity", "quality", "band",
+    }
     labels = [str(r.get(label_key, "")).lower() for r in records]
-    is_temporal = any(
-        any(kw in label for kw in time_kws) for label in labels
-    )
+
+    # Rule 1: temporal → line
+    is_temporal = any(any(kw in label for kw in time_kws) for label in labels)
     if n >= MIN_RECORDS_FOR_LINE and is_temporal:
         return "line"
-    if n <= 7:
-        return "pie"
+
+    # Rule 2: ordinal label column name or numeric-only labels (e.g. "3","4"…"9") → bar
+    label_key_lower = label_key.lower()
+    is_ordinal_key = any(kw in label_key_lower for kw in ordinal_kws)
+    all_numeric_labels = all(label.strip().lstrip("-").replace(".", "", 1).isdigit()
+                             for label in labels if label.strip())
+    if is_ordinal_key or all_numeric_labels:
+        return "bar"
+
+    # Rule 3: true part-of-whole (≤ 5 items, values sum near 100) → pie
+    if n <= 5:
+        num_vals = [_to_float(r.get(label_key)) for r in records]
+        # Try first numeric column if label column isn't numeric
+        fields = _pick_label_and_value_fields(records)
+        if fields:
+            val_col = fields[1]
+            num_vals = [_to_float(r.get(val_col)) for r in records]
+        total = sum(v for v in num_vals if v is not None)
+        if 95 <= total <= 105:
+            return "pie"
+
     return "bar"
 
 
@@ -613,12 +648,27 @@ def _create_chart_image(
 
 # ── Slide-building primitives ──────────────────────────────────────────────────
 
+def _remove_all_slides(prs: Presentation) -> None:
+    """Remove all content slides, keeping slide masters and layouts intact.
+
+    Drops both the XML element and the relationship so no orphaned parts
+    end up as duplicate entries in the output zip.
+    """
+    slide_id_list = prs.slides._sldIdLst
+    for slide_id in list(slide_id_list):
+        r_id = slide_id.get(qn("r:id"))
+        slide_id_list.remove(slide_id)
+        if r_id:
+            try:
+                prs.part.drop_rel(r_id)
+            except Exception:
+                pass  # some builds of python-pptx don't expose drop_rel; ignore
+
+
 def _new_blank_slide(prs: Presentation, theme: ThemeProfile) -> Any:
     layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[-1]
     slide = prs.slides.add_slide(layout)
-    fill = slide.background.fill
-    fill.solid()
-    fill.fore_color.rgb = _to_rgb(theme.background_hex)
+    # Do not override the slide background — let the template master/layout supply it.
     return slide
 
 
@@ -946,9 +996,9 @@ def generate_presentation(
     n_slides = max(1, min(n_slides, 3))
     print(f"[slides] generating {n_slides} slide(s) — title: {title!r}")
 
-    prs = Presentation()
-    prs.slide_width = theme.slide_width or prs.slide_width
-    prs.slide_height = theme.slide_height or prs.slide_height
+    # Load the template as the base so masters, layouts, and background design are preserved.
+    prs = Presentation(str(template_path))
+    _remove_all_slides(prs)
     theme.slide_width = prs.slide_width
     theme.slide_height = prs.slide_height
 
