@@ -1,17 +1,19 @@
 # PowerPoint One-Pager Skill
 
-A Python-based Copilot skill script that reads any `.pptx` template, extracts its visual theme, ingests structured data from multiple file formats, and generates a branded single-slide one-pager with a title, bullets, charts, and a table.
+A Python-based Copilot Agent Skill that reads any `.pptx` template, extracts its visual theme, ingests structured data from multiple file formats, and generates a branded single-slide one-pager with a title, bullets, charts, and a table.
+
+This skill lives at `.github/skills/powerpoint-onepager/` and is registered via `SKILL.md` so Copilot agent mode can invoke it automatically.
 
 ## Requirements
 
 ```bash
-pip install -r requirements.txt
+pip install -r .github/skills/powerpoint-onepager/requirements.txt
 ```
 
 ## Usage
 
 ```bash
-python generate_onepager.py --template deck.pptx --data data.json --output onepager.pptx --title "Q1 Analysis"
+python .github/skills/powerpoint-onepager/generate_onepager.py --template deck.pptx --data data.json --output onepager.pptx --title "Q1 Analysis"
 ```
 
 `--template` and `--data` are required. `--output` defaults to `onepager.pptx`. `--title` is optional.
@@ -20,22 +22,22 @@ python generate_onepager.py --template deck.pptx --data data.json --output onepa
 
 #### JSON
 ```bash
-python generate_onepager.py --template deck.pptx --data sample_data.json
+python .github/skills/powerpoint-onepager/generate_onepager.py --template deck.pptx --data .github/skills/powerpoint-onepager/sample_data.json
 ```
 
 #### CSV
 ```bash
-python generate_onepager.py --template deck.pptx --data metrics.csv --output onepager_csv.pptx
+python .github/skills/powerpoint-onepager/generate_onepager.py --template deck.pptx --data metrics.csv --output onepager_csv.pptx
 ```
 
 #### Excel (`.xlsx` / `.xls`)
 ```bash
-python generate_onepager.py --template deck.pptx --data metrics.xlsx --output onepager_excel.pptx
+python .github/skills/powerpoint-onepager/generate_onepager.py --template deck.pptx --data metrics.xlsx --output onepager_excel.pptx
 ```
 
 #### Markdown table (`.md`)
 ```bash
-python generate_onepager.py --template deck.pptx --data metrics.md --output onepager_md.pptx
+python .github/skills/powerpoint-onepager/generate_onepager.py --template deck.pptx --data metrics.md --output onepager_md.pptx
 ```
 
 ## What gets extracted from the template
