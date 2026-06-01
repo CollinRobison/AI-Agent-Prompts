@@ -15,8 +15,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pptx import Presentation
 from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.text import PP_ALIGN
-from pptx.util import Inches, Pt
+from pptx.util import Pt
 
 
 # Conservative defaults used when a template does not expose theme details clearly.
@@ -25,6 +26,9 @@ DEFAULT_TEXT = "1F1F1F"
 DEFAULT_ACCENTS = ["2F5597", "4472C4", "70AD47", "FFC000", "ED7D31"]
 DEFAULT_HEADING_FONT = "Calibri"
 DEFAULT_BODY_FONT = "Calibri"
+MAX_TABLE_COLUMNS = 4
+MAX_TABLE_ROWS = 6
+MIN_RECORDS_FOR_LINE_CHART = 3
 
 
 @dataclass
@@ -48,6 +52,51 @@ class NormalizedData:
     records: list[dict[str, Any]]
     summary: list[str] = field(default_factory=list)
     title: str | None = None
+
+
+def _compute_layout(theme: ThemeProfile) -> dict[str, int]:
+    """Build a proportional one-pager layout that fits any slide dimensions."""
+    width = theme.slide_width
+    height = theme.slide_height
+
+    margin = int(width * 0.04)
+    gutter = int(width * 0.03)
+    title_top = int(height * 0.03)
+    title_height = int(height * 0.1)
+
+    left_width = int(width * 0.46)
+    right_left = margin + left_width + gutter
+    right_width = max(int(width * 0.2), width - right_left - margin)
+
+    bullets_top = title_top + title_height + int(height * 0.015)
+    bullets_height = int(height * 0.3)
+
+    chart_top = bullets_top
+    chart_height = int(height * 0.25)
+    second_chart_top = chart_top + chart_height + int(height * 0.02)
+
+    table_top = int(height * 0.67)
+    table_height = max(int(height * 0.16), height - table_top - margin)
+
+    return {
+        "title_left": margin,
+        "title_top": title_top,
+        "title_width": width - (2 * margin),
+        "title_height": title_height,
+        "bullets_left": margin,
+        "bullets_top": bullets_top,
+        "bullets_width": left_width,
+        "bullets_height": bullets_height,
+        "chart_left": right_left,
+        "chart_top": chart_top,
+        "chart_width": right_width,
+        "chart_height": chart_height,
+        "chart2_top": second_chart_top,
+        "table_left": margin,
+        "table_top": table_top,
+        "table_width": width - (2 * margin),
+        "table_height": table_height,
+    }
 
 
 def _rgb_to_hex(rgb: RGBColor | None) -> str | None:
@@ -118,7 +167,7 @@ def extract_theme(template_path: Path) -> ThemeProfile:
 
         for shape in slide.shapes:
             # Capture potential logo placement to optionally preserve brand placement.
-            if getattr(shape, "shape_type", None) == 13:  # MSO_SHAPE_TYPE.PICTURE
+            if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.PICTURE:
                 logo_positions.append((shape.left, shape.top, shape.width, shape.height))
 
             shape_color = _extract_shape_color_hex(shape)
@@ -364,8 +413,13 @@ def _set_text_shape_style(shape: Any, font_name: str, color_hex: str, size_pt: i
             run.font.color.rgb = _to_rgb(color_hex)
 
 
-def _add_title(slide: Any, text: str, theme: ThemeProfile) -> None:
-    title_shape = slide.shapes.add_textbox(Inches(0.5), Inches(0.25), Inches(12.0), Inches(0.9))
+def _add_title(slide: Any, text: str, theme: ThemeProfile, layout: dict[str, int]) -> None:
+    title_shape = slide.shapes.add_textbox(
+        layout["title_left"],
+        layout["title_top"],
+        layout["title_width"],
+        layout["title_height"],
+    )
     tf = title_shape.text_frame
     tf.clear()
     p = tf.paragraphs[0]
@@ -378,8 +432,13 @@ def _add_title(slide: Any, text: str, theme: ThemeProfile) -> None:
     run.font.color.rgb = _to_rgb(theme.text_hex)
 
 
-def _add_bullets(slide: Any, bullets: list[str], theme: ThemeProfile) -> None:
-    bullet_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.3), Inches(5.9), Inches(2.0))
+def _add_bullets(slide: Any, bullets: list[str], theme: ThemeProfile, layout: dict[str, int]) -> None:
+    bullet_shape = slide.shapes.add_textbox(
+        layout["bullets_left"],
+        layout["bullets_top"],
+        layout["bullets_width"],
+        layout["bullets_height"],
+    )
     tf = bullet_shape.text_frame
     tf.clear()
 
@@ -392,16 +451,23 @@ def _add_bullets(slide: Any, bullets: list[str], theme: ThemeProfile) -> None:
         p.font.color.rgb = _to_rgb(theme.text_hex)
 
 
-def _add_table(slide: Any, records: list[dict[str, Any]], theme: ThemeProfile) -> None:
+def _add_table(slide: Any, records: list[dict[str, Any]], theme: ThemeProfile, layout: dict[str, int]) -> None:
     if not records:
         return
 
-    columns = list(records[0].keys())[:4]
+    columns = list(records[0].keys())[:MAX_TABLE_COLUMNS]
     if not columns:
         return
 
-    row_count = min(len(records), 6)
-    table_shape = slide.shapes.add_table(row_count + 1, len(columns), Inches(0.5), Inches(5.0), Inches(12.4), Inches(1.9))
+    row_count = min(len(records), MAX_TABLE_ROWS)
+    table_shape = slide.shapes.add_table(
+        row_count + 1,
+        len(columns),
+        layout["table_left"],
+        layout["table_top"],
+        layout["table_width"],
+        layout["table_height"],
+    )
     table = table_shape.table
 
     for col_idx, col_name in enumerate(columns):
@@ -429,13 +495,16 @@ def generate_onepager(template_path: Path, data_path: Path, output_path: Path, t
     prs = Presentation()
     prs.slide_width = theme.slide_width or prs.slide_width
     prs.slide_height = theme.slide_height or prs.slide_height
+    theme.slide_width = prs.slide_width
+    theme.slide_height = prs.slide_height
+    layout = _compute_layout(theme)
 
-    layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[0]
-    slide = prs.slides.add_slide(layout)
+    slide_layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[0]
+    slide = prs.slides.add_slide(slide_layout)
 
     _set_slide_background(slide, theme.background_hex)
-    _add_title(slide, title, theme)
-    _add_bullets(slide, bullets, theme)
+    _add_title(slide, title, theme, layout)
+    _add_bullets(slide, bullets, theme, layout)
 
     fields = _pick_label_and_value_fields(data.records)
     if fields:
@@ -443,17 +512,29 @@ def generate_onepager(template_path: Path, data_path: Path, output_path: Path, t
         with tempfile.TemporaryDirectory(prefix="onepager_charts_") as tmpdir:
             tmpdir_path = Path(tmpdir)
             bar_chart_path = tmpdir_path / "bar_chart.png"
-            line_chart_path = tmpdir_path / "line_chart.png"
 
             _create_chart_image(data.records, label_key, value_key, "bar", theme.accent_hexes, bar_chart_path)
-            _create_chart_image(data.records, label_key, value_key, "line", theme.accent_hexes, line_chart_path)
 
             # Embed one or two charts in the right-hand side visual panel.
-            slide.shapes.add_picture(str(bar_chart_path), Inches(6.6), Inches(1.3), Inches(6.1), Inches(2.2))
-            if len(data.records) > 2:
-                slide.shapes.add_picture(str(line_chart_path), Inches(6.6), Inches(3.7), Inches(6.1), Inches(2.2))
+            slide.shapes.add_picture(
+                str(bar_chart_path),
+                layout["chart_left"],
+                layout["chart_top"],
+                layout["chart_width"],
+                layout["chart_height"],
+            )
+            if len(data.records) >= MIN_RECORDS_FOR_LINE_CHART:
+                line_chart_path = tmpdir_path / "line_chart.png"
+                _create_chart_image(data.records, label_key, value_key, "line", theme.accent_hexes, line_chart_path)
+                slide.shapes.add_picture(
+                    str(line_chart_path),
+                    layout["chart_left"],
+                    layout["chart2_top"],
+                    layout["chart_width"],
+                    layout["chart_height"],
+                )
 
-    _add_table(slide, data.records, theme)
+    _add_table(slide, data.records, theme, layout)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(output_path))
